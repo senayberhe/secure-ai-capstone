@@ -6,13 +6,13 @@ import time
 from typing import Literal
 from fastapi import FastAPI, Header, HTTPException, Request, Depends
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from .config import Settings
 from .db import (Document, Chunk, Job, ModelVersion, Incident, Audit, ReleaseEvidence, ArtifactVerification,
-                 database, init_schema, uid)
+                 User, database, init_schema, uid)
 from .security import (Principal, authenticate, can_review, require_release_operator, require_role,
                        redact_pii, sanitize_incident_summary)
 from .retrieval import split_text, retrieve, extract_report, index_chunks
@@ -27,6 +27,9 @@ from .attestation import load_public_keys
 from .scorecard import scorecard
 from .telemetry import REQUESTS, DURATION, metric_bytes
 from .queueing import MemoryRateLimiter, RedisNotifier
+from .auth import (OAUTH_COOKIE, SESSION_COOKIE, GoogleAuthError, GoogleOIDC, end_session, google_account,
+                   hash_password, new_user, normalize_email, principal_for, session_user, start_session,
+                   verify_password)
 
 
 class StrictModel(BaseModel):
@@ -101,6 +104,17 @@ class DecisionRows(StrictModel):
     leak: bool = False
 
 
+class SignUp(StrictModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=12, max_length=128)
+    name: str | None = Field(default=None, max_length=100)
+
+
+class Login(StrictModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=128)
+
+
 class ScorecardRequest(StrictModel):
     records: list[DecisionRows] = Field(min_length=20, max_length=100000)
 
@@ -120,6 +134,10 @@ def create_app(settings: Settings, *, init_tables: bool = False):
     trusted_keys = load_public_keys(settings.attestation_keys)
     gate = {"artifact_root": settings.artifact_root, "max_age_hours": settings.evidence_max_age_hours}
     app.state.graph = None
+    app.state.google = None
+    if settings.google_client_id and settings.google_client_secret:
+        app.state.google = GoogleOIDC(settings.google_client_id, settings.google_client_secret,
+                                      f"{settings.public_url}/v1/auth/google/callback")
     if settings.graph == "langgraph":
         # The API resumes interrupted research threads from the shared durable checkpoint store.
         from .agent import build_durable_graph
@@ -145,8 +163,47 @@ def create_app(settings: Settings, *, init_tables: bool = False):
         DURATION.labels(route=route_label, method=request.method).observe(time.perf_counter() - start)
         return response
 
+    def require_csrf_header(request: Request):
+        # Cookies ride along on cross-site requests; a custom header can't be added cross-origin without a
+        # CORS preflight, which this API never grants. SameSite=Lax is the first line, this is the second.
+        if request.method not in {"GET", "HEAD", "OPTIONS"} and request.headers.get("X-Requested-With") != "capstone":
+            raise HTTPException(403, "Missing X-Requested-With header")
+
+    def limit(key: str, n: int):
+        try:
+            allowed = app.state.limiter.allow(hashlib.sha256(key.encode()).hexdigest(), limit=n)
+        except Exception:
+            raise HTTPException(503, "Rate-limit service unavailable")
+        if not allowed:
+            raise HTTPException(429, "Too many attempts")
+
+    def client_ip(request: Request) -> str:
+        # Rightmost X-Forwarded-For entry is the address nginx saw; earlier entries are client-supplied.
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        return forwarded.rsplit(",", 1)[-1].strip() or (request.client.host if request.client else "unknown")
+
+    def signed_in(response: Response, s: Session, user) -> dict:
+        token = start_session(s, user, settings.session_hours)
+        s.commit()
+        response.set_cookie(SESSION_COOKIE, token, max_age=settings.session_hours * 3600, httponly=True,
+                            secure=settings.cookie_secure, samesite="lax", path="/")
+        return me_payload(principal_for(user))
+
+    def me_payload(p: Principal) -> dict:
+        return {"user": p.user, "tenant": p.tenant, "role": p.role, "groups": sorted(p.groups),
+                "release_operator": bool(settings.release_tenant) and p.tenant == settings.release_tenant}
+
     def principal(request: Request) -> Principal:
-        p = authenticate(request.headers.get("Authorization"), settings.api_tokens)
+        header, cookie = request.headers.get("Authorization"), request.cookies.get(SESSION_COOKIE)
+        if header or not cookie:
+            p = authenticate(header, settings.api_tokens)
+        else:
+            require_csrf_header(request)
+            with sessions() as s:
+                user = session_user(s, cookie)
+            if user is None:
+                raise HTTPException(401, "Authentication required")
+            p = principal_for(user)
         # Avoid raw tokens in Redis keys. Rate limit scoped by tenant + subject.
         identity = hashlib.sha256(f"{p.tenant}:{p.user}".encode()).hexdigest()
         try:
@@ -404,8 +461,78 @@ def create_app(settings: Settings, *, init_tables: bool = False):
 
     @app.get("/v1/me")
     def me(p: Principal = Depends(principal)):
-        return {"user": p.user, "tenant": p.tenant, "role": p.role, "groups": sorted(p.groups),
-                "release_operator": bool(settings.release_tenant) and p.tenant == settings.release_tenant}
+        return me_payload(p)
+
+    @app.get("/v1/auth/config")
+    def auth_config():
+        return {"password": True, "google": app.state.google is not None}
+
+    @app.post("/v1/auth/signup", status_code=201)
+    def signup(data: SignUp, request: Request, response: Response):
+        limit(f"signup:{client_ip(request)}", 10)
+        email = normalize_email(data.email)
+        if email is None:
+            raise HTTPException(422, "Enter a valid email address of at most 64 characters")
+        with sessions() as s:
+            if s.scalar(select(User.id).where(User.email == email)):
+                raise HTTPException(409, "An account with this email already exists")
+            user = new_user(email, password_hash=hash_password(data.password), name=data.name or None)
+            s.add(user)
+            s.add(Audit(tenant=user.tenant, action="account_created", actor=email))
+            s.flush()
+            return signed_in(response, s, user)
+
+    @app.post("/v1/auth/login")
+    def login(data: Login, request: Request, response: Response):
+        limit(f"login-ip:{client_ip(request)}", 20)
+        email = normalize_email(data.email) or ""
+        limit(f"login:{email}", 10)
+        with sessions() as s:
+            user = s.scalar(select(User).where(User.email == email)) if email else None
+            if not verify_password(data.password, user.password_hash if user else None):
+                raise HTTPException(401, "Invalid email or password")
+            return signed_in(response, s, user)
+
+    @app.post("/v1/auth/logout", status_code=204)
+    def logout(request: Request):
+        require_csrf_header(request)
+        response = Response(status_code=204)
+        if token := request.cookies.get(SESSION_COOKIE):
+            with sessions() as s:
+                end_session(s, token)
+                s.commit()
+        response.delete_cookie(SESSION_COOKIE, path="/", secure=settings.cookie_secure, httponly=True, samesite="lax")
+        return response
+
+    @app.get("/v1/auth/google/start")
+    def google_start(request: Request):
+        if app.state.google is None:
+            raise HTTPException(404, "Google sign-in is not configured")
+        limit(f"google:{client_ip(request)}", 20)
+        url, cookie = app.state.google.start()
+        response = RedirectResponse(url, status_code=302)
+        response.set_cookie(OAUTH_COOKIE, cookie, max_age=600, httponly=True, secure=settings.cookie_secure,
+                            samesite="lax", path="/v1/auth/google")
+        return response
+
+    @app.get("/v1/auth/google/callback")
+    def google_callback(request: Request, code: str | None = None, state: str | None = None):
+        if app.state.google is None:
+            raise HTTPException(404, "Google sign-in is not configured")
+        response = RedirectResponse("/", status_code=302)
+        response.delete_cookie(OAUTH_COOKIE, path="/v1/auth/google")
+        try:
+            if not code or not state:
+                raise GoogleAuthError("missing code or state")
+            identity = app.state.google.identity(code, state, request.cookies.get(OAUTH_COOKIE, ""))
+        except GoogleAuthError:
+            response.headers["Location"] = "/?auth_error=google"
+            return response
+        with sessions() as s:
+            user = google_account(s, identity["sub"], identity["email"], identity["name"])
+            s.flush()
+            signed_in(response, s, user)
+        return response
 
     @app.get("/v1/documents")
     def list_documents(p: Principal = Depends(principal)):

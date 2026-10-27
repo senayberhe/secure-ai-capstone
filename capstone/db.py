@@ -160,6 +160,28 @@ class Audit(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class User(Base):
+    """A self-registered account. Each one owns a private workspace tenant; email is the principal's user."""
+    __tablename__ = "users"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=uid)
+    email: Mapped[str] = mapped_column(String(64), unique=True)
+    name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tenant: Mapped[str] = mapped_column(String(64), unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    google_sub: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    email_verified: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AuthSession(Base):
+    """Server-side browser session. Only the SHA-256 of the cookie value is stored."""
+    __tablename__ = "auth_sessions"
+    token_sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
 def database(url: str):
     options = {"future": True, "pool_pre_ping": True}
     if url == "sqlite://":

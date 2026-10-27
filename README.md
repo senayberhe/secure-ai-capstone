@@ -36,6 +36,7 @@ Details and caveats: [`docs/EVALUATION.md`](docs/EVALUATION.md) and [`TEST_REPOR
 - **Privacy.** PII is redacted on this machine before storage and before any outbound LLM call (regex by default, Presidio as an option).
 - **Quality gates.** Precision, recall and F1 with Wilson intervals per group. The release is held if any subgroup fails, even when the overall average passes.
 - **Prompt-injection suite.** 30 attacks in 7 categories run through the real upload, retrieval, worker and review paths. Tests confirm each defense is what stops its attacks.
+- **Accounts.** Sign up with email and password or Google. Each account gets a private workspace. Passwords are hashed with scrypt, sessions are `HttpOnly` cookies that can be revoked, and Google sign-in uses the server-side OIDC flow with PKCE.
 - **Web UI.** React + TypeScript app for documents, research review, releases, quality and incidents, served behind a strict Content-Security-Policy.
 
 More detail per feature: [`docs/FEATURES.md`](docs/FEATURES.md).

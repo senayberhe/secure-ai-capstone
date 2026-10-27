@@ -40,6 +40,10 @@ services:
       CAPSTONE_ARTIFACT_ROOT: /models
       OPENAI_MODEL: ${OPENAI_MODEL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Accounts: the URL people open (https:// turns on Secure cookies) and optional Google sign-in.
+      CAPSTONE_PUBLIC_URL: ${CAPSTONE_PUBLIC_URL:-http://127.0.0.1:8090}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     depends_on:
       postgres: {condition: service_healthy}
 

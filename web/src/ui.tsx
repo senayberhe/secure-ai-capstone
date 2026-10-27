@@ -83,7 +83,7 @@ export function ErrorNote({ error }: { error: string | null }) {
 
 export function describe(error: unknown): string {
   if (error instanceof ApiError) {
-    if (error.status === 401) return "Your token was rejected. Sign out and sign in again.";
+    if (error.status === 401) return "Your sign-in was rejected or has expired. Sign out and sign in again.";
     if (error.status === 429) return "Rate limit reached. Wait a minute and try again.";
     return error.message;
   }

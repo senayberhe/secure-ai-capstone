@@ -80,6 +80,33 @@ The schema service uses `Base.metadata.create_all`, which creates new tables but
 
 Do not run `docker compose down -v` on an installation containing data that must be preserved: it deletes the named volumes, including approvals, release evidence and checkpoints.
 
+## 3a. Accounts and Google sign-in
+
+People can create an account on the sign-in page with an email and password, or with **Continue with Google**. Every new account gets its own private workspace tenant (`ws-…`), is that workspace's admin and sees only its own documents. Sign-up never grants access to a configured tenant such as `acme`, and never to release operations. Research reports still need an independent reviewer, so a one-person workspace can create jobs but not approve them.
+
+How it is protected:
+
+- Passwords are hashed with scrypt (salted, parameters stored per hash). Login answers the same way for unknown emails and wrong passwords, and is rate limited per email and per client IP.
+- Sign-in sets an `HttpOnly`, `SameSite=Lax` session cookie; only its SHA-256 is stored in `auth_sessions`, so logout revokes it server-side. Sessions last `CAPSTONE_SESSION_HOURS` (default 24). The cookie is `Secure` when `CAPSTONE_PUBLIC_URL` starts with `https://`.
+- Cookie-authenticated writes must send `X-Requested-With: capstone`, which a cross-site page cannot add.
+- Google uses the server-side authorization-code flow with PKCE, `state` and `nonce`. The API verifies the ID token's signature, audience, issuer, expiry and `email_verified`. No Google script runs in the page, so the Content-Security-Policy stays strict.
+- If someone registered an email with a password and its real owner later signs in with Google, Google's verification wins: the unverified password and its sessions are removed.
+- Development bearer tokens from `CAPSTONE_TOKENS_JSON` keep working for CI, scripts and the configured tenants.
+
+To turn on Google sign-in:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials), configure the OAuth consent screen, then **Create credentials → OAuth client ID → Web application**.
+2. Add the authorized redirect URI `<CAPSTONE_PUBLIC_URL>/v1/auth/google/callback`, for example `http://127.0.0.1:8090/v1/auth/google/callback` for Compose or `http://127.0.0.1:5173/v1/auth/google/callback` for `npm run dev`. It must match exactly.
+3. Put the values in `.env` and restart the API:
+
+```bash
+CAPSTONE_PUBLIC_URL=http://127.0.0.1:8090
+GOOGLE_CLIENT_ID=1234567890-abc.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=...   # keep it out of git, like every value in .env
+```
+
+`GET /v1/auth/config` then reports `"google": true` and the button appears. Still missing for a public service: email verification and password reset for password accounts (both need an email provider), and inviting others into a workspace.
+
 ## 4. API smoke test
 
 With a configured editor token:

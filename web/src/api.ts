@@ -1,5 +1,6 @@
-// Typed client for the capstone API. All calls are same-origin (proxied in dev and in
-// Docker), and the bearer token never leaves this module except in the Authorization header.
+// Typed client for the capstone API. All calls are same-origin (proxied in dev and in Docker).
+// Accounts sign in with an HttpOnly session cookie that scripts can't read; development bearer
+// tokens never leave this module except in the Authorization header.
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -56,24 +57,43 @@ async function parse(res: Response): Promise<unknown> {
   }
 }
 
-export function createClient(token: string, fetchImpl: Fetch = (...args) => fetch(...args)) {
+export type AuthConfig = { password: boolean; google: boolean };
+
+// Cookie-authenticated writes must carry this header; a cross-site page can't add it (see api.py).
+const CSRF = { "X-Requested-With": "capstone" };
+
+async function call<T>(fetchImpl: Fetch, method: string, path: string, body: unknown, headers: Record<string, string>): Promise<T> {
+  const res = await fetchImpl(path, {
+    method,
+    headers: { ...(body === undefined ? {} : { "Content-Type": "application/json" }), ...headers },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const data = await parse(res);
+  if (!res.ok) {
+    const detail = data && typeof data === "object" && "detail" in data && typeof data.detail === "string"
+      ? data.detail : `Request failed (${res.status})`;
+    throw new ApiError(res.status, detail);
+  }
+  return data as T;
+}
+
+/** Account endpoints. They set or clear the session cookie; no token is ever returned to scripts. */
+export function createAuth(fetchImpl: Fetch = (...args) => fetch(...args)) {
+  return {
+    config: () => call<AuthConfig>(fetchImpl, "GET", "/v1/auth/config", undefined, {}),
+    signup: (email: string, password: string) =>
+      call<Me>(fetchImpl, "POST", "/v1/auth/signup", { email, password }, CSRF),
+    login: (email: string, password: string) =>
+      call<Me>(fetchImpl, "POST", "/v1/auth/login", { email, password }, CSRF),
+    logout: () => call<null>(fetchImpl, "POST", "/v1/auth/logout", undefined, CSRF),
+  };
+}
+
+/** `token` is a development bearer key; null uses the session cookie set by sign-in. */
+export function createClient(token: string | null, fetchImpl: Fetch = (...args) => fetch(...args)) {
+  const auth = token ? { Authorization: `Bearer ${token}` } : CSRF;
   async function request<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
-    const res = await fetchImpl(path, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-        ...headers,
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const data = await parse(res);
-    if (!res.ok) {
-      const detail = data && typeof data === "object" && "detail" in data && typeof data.detail === "string"
-        ? data.detail : `Request failed (${res.status})`;
-      throw new ApiError(res.status, detail);
-    }
-    return data as T;
+    return call<T>(fetchImpl, method, path, body, { ...auth, ...headers });
   }
   const get = <T,>(path: string) => request<T>("GET", path);
   const post = <T,>(path: string, body?: unknown, headers?: Record<string, string>) => request<T>("POST", path, body, headers);

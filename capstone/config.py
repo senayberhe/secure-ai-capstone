@@ -19,6 +19,15 @@ class Settings:
     attestation_keys: dict = field(default_factory=dict)
     artifact_root: str | None = None
     evidence_max_age_hours: int = 168
+    # Accounts: browser origin users visit (cookie Secure flag, Google redirect URI) and optional Google sign-in.
+    public_url: str = "http://127.0.0.1:8090"
+    session_hours: int = 24
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+
+    @property
+    def cookie_secure(self) -> bool:
+        return self.public_url.startswith("https://")
 
     @classmethod
     def from_env(cls):
@@ -42,6 +51,10 @@ class Settings:
             attestation_keys=_attestation_keys(),
             artifact_root=os.getenv("CAPSTONE_ARTIFACT_ROOT") or None,
             evidence_max_age_hours=int(os.getenv("CAPSTONE_EVIDENCE_MAX_AGE_HOURS", "168")),
+            public_url=os.getenv("CAPSTONE_PUBLIC_URL", "http://127.0.0.1:8090").rstrip("/"),
+            session_hours=int(os.getenv("CAPSTONE_SESSION_HOURS", "24")),
+            google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
+            google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET") or None,
         )
 
 

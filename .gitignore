@@ -1,0 +1,14 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.db
+*.sqlite
+*.sqlite3
+*.pyc
+artifacts/private/
+coverage.xml
+.secrets/
+models/
+*.egg-info/
+.DS_Store

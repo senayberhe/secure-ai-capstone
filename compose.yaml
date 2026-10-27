@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: capstone
+      POSTGRES_USER: capstone
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U capstone -d capstone"]
+      interval: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 15
+    restart: unless-stopped
+
+  schema:
+    build: .
+    command: ["python", "-m", "capstone.init_db"]
+    environment: &env
+      DATABASE_URL: postgresql+psycopg://capstone:${POSTGRES_PASSWORD}@postgres:5432/capstone
+      REDIS_URL: redis://redis:6379/0
+      CAPSTONE_TOKENS_JSON: ${CAPSTONE_TOKENS_JSON:?Set CAPSTONE_TOKENS_JSON}
+      CAPSTONE_ROUTING_SECRET: ${CAPSTONE_ROUTING_SECRET:?Set CAPSTONE_ROUTING_SECRET}
+      CAPSTONE_RELEASE_TENANT: ${CAPSTONE_RELEASE_TENANT:?Set CAPSTONE_RELEASE_TENANT}
+      MODEL_BACKEND: ${MODEL_BACKEND:-offline}
+      CAPSTONE_GRAPH: langgraph
+      # Durable LangGraph checkpoints live in the same PostgreSQL database (PostgresSaver).
+      CAPSTONE_ATTESTATION_KEYS: ${CAPSTONE_ATTESTATION_KEYS:-{}}
+      CAPSTONE_ARTIFACT_ROOT: /models
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    depends_on:
+      postgres: {condition: service_healthy}
+
+  api:
+    build: .
+    environment: *env
+    volumes:
+      # Approved artifact store, read-only: canary start re-hashes the registered bytes here.
+      - ./models:/models:ro
+    ports:
+      # Host port is configurable: set CAPSTONE_PORT in .env if 8000 is taken by another project.
+      - "127.0.0.1:${CAPSTONE_PORT:-8000}:8000"
+    healthcheck:
+      # The slim image has no curl; /health/ready checks PostgreSQL and Redis.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    depends_on:
+      schema: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["python", "-m", "capstone.worker"]
+    environment: *env
+    depends_on:
+      schema: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+  web:
+    build: ./web
+    ports:
+      # React UI; it proxies /v1 to the api service on the internal network.
+      - "127.0.0.1:${CAPSTONE_WEB_PORT:-8090}:8080"
+    depends_on:
+      api: {condition: service_healthy}
+    restart: unless-stopped
+volumes:
+  pgdata:
+  redisdata:

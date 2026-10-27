@@ -1,0 +1,98 @@
+name: secure-ai-capstone-ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Model version to attest (must match its registration)
+        required: true
+      artifact_url:
+        description: HTTPS URL of the approved model artifact to hash
+        required: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: capstone_test
+          POSTGRES_USER: capstone
+          POSTGRES_PASSWORD: integration_only_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U capstone -d capstone_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: astral-sh/setup-uv@v6
+      - name: Install test and production dependencies
+        run: uv sync --extra test --extra production
+      - name: Verify syntax
+        run: uv run python -m compileall -q capstone
+      - name: Run unit and integration tests
+        env:
+          TEST_POSTGRES_URL: postgresql+psycopg://capstone:integration_only_password@localhost:5432/capstone_test
+          TEST_REDIS_URL: redis://localhost:6379/15
+        run: uv run pytest -q
+      - name: Build container
+        run: docker build -t secure-ai-capstone:ci .
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run build
+      - name: Build web container
+        run: docker build -t secure-ai-capstone-web:ci .
+
+  # Challenge 3: CI is the independent attester. Only this job holds the signing key
+  # (repository secret CAPSTONE_ATTESTATION_PRIVATE_KEY); the API holds only the public key.
+  release-evidence:
+    if: github.event_name == 'workflow_dispatch'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: release-evidence
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Install with the approved semantic model
+        run: uv sync --extra semantic
+      - name: Fetch the artifact to hash (bytes only, never loaded)
+        env:
+          ARTIFACT_URL: ${{ inputs.artifact_url }}
+        run: |
+          case "$ARTIFACT_URL" in https://*) ;; *) echo "artifact_url must be HTTPS"; exit 1;; esac
+          name="$(basename "${ARTIFACT_URL%%\?*}")"
+          curl -fsSL --max-filesize 21474836480 "$ARTIFACT_URL" -o "$name"
+          echo "ARTIFACT=$name" >> "$GITHUB_ENV"
+      - name: Benchmark, gate and sign
+        env:
+          CAPSTONE_ATTESTATION_PRIVATE_KEY: ${{ secrets.CAPSTONE_ATTESTATION_PRIVATE_KEY }}
+          CAPSTONE_EMBEDDING_OFFLINE: "0"   # CI may download the pinned, approved model
+        run: uv run python -m capstone.release_evidence build --version "${{ inputs.version }}" --artifact "$ARTIFACT" --out evidence.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-evidence-${{ inputs.version }}
+          path: evidence.json

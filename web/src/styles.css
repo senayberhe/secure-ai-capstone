@@ -1,0 +1,71 @@
+@import "tailwindcss";
+
+/* Palette as CSS variables so light and dark switch without `dark:` on every element.
+   Tailwind utilities read them through the @theme names below (bg-surface, text-muted, …). */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --ink: #14181f;
+  --muted: #5c6675;
+  --line: #dfe3e9;
+  --accent: #2b5cd6;
+  --accent-ink: #ffffff;
+  --ok: #11734b;     --ok-bg: #e3f4ec;
+  --warn: #8a5a00;   --warn-bg: #fdf1d8;
+  --bad: #b3261e;    --bad-bg: #fbe7e5;
+  --info: #24589e;   --info-bg: #e5eefb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216;
+    --surface: #171b21;
+    --surface-2: #1e232b;
+    --ink: #e6e9ee;
+    --muted: #98a2b0;
+    --line: #2a313b;
+    --accent: #6d97ff;
+    --accent-ink: #0b1020;
+    --ok: #5fd39d;     --ok-bg: #12301f;
+    --warn: #f0c060;   --warn-bg: #33270d;
+    --bad: #ff8a80;    --bad-bg: #3a1714;
+    --info: #8fb6ff;   --info-bg: #15233d;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-ok: var(--ok);       --color-ok-bg: var(--ok-bg);
+  --color-warn: var(--warn);   --color-warn-bg: var(--warn-bg);
+  --color-bad: var(--bad);     --color-bad-bg: var(--bad-bg);
+  --color-info: var(--info);   --color-info-bg: var(--info-bg);
+}
+
+@layer base {
+  body { @apply bg-bg text-ink font-sans leading-normal antialiased; }
+  h1 { @apply text-2xl font-semibold tracking-tight; }
+  h2 { @apply text-base font-semibold tracking-tight; }
+  code { @apply rounded bg-surface-2 px-1.5 py-px font-mono text-[0.85em] wrap-anywhere; }
+
+  /* Every form control looks the same, like @tailwindcss/forms would do. */
+  input, select, textarea {
+    @apply w-full min-w-0 rounded-lg border border-line bg-surface px-2.5 py-2 text-ink
+           focus:outline-2 focus:outline-offset-1 focus:outline-accent;
+  }
+  textarea { @apply resize-y; }
+  button:not(:disabled), [role="button"] { @apply cursor-pointer; }
+  button:focus-visible { @apply outline-2 outline-offset-1 outline-accent; }
+
+  table { @apply w-full border-collapse text-sm; }
+  th, td { @apply border-b border-line px-2.5 py-2 text-left align-middle; }
+  th { @apply text-xs font-semibold uppercase tracking-wide text-muted; }
+  td { @apply tabular-nums; }
+}

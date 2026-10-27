@@ -1,0 +1,99 @@
+{
+  "dataset_sha256": "e5b75852df7576ad67dd59b9b19f13b84a93b4a1b0fec62a7ba3214320c2974c",
+  "questions": 61,
+  "answerable": 35,
+  "abstain_expected": 26,
+  "documents": 27,
+  "top_k": 3,
+  "results": {
+    "hash-128": {
+      "bm25": {
+        "recall_at_3": 0.9143,
+        "mrr": 0.8381,
+        "recall_at_3_by_category": {
+          "adversarial": 1.0,
+          "exact_id": 1.0,
+          "ordinary": 1.0,
+          "paraphrase": 0.7273
+        },
+        "abstention_rate": 0.1154,
+        "latency_ms_p50": 0.424,
+        "latency_ms_p95": 0.528,
+        "cross_tenant_or_group_leaks": 0
+      },
+      "dense": {
+        "recall_at_3": 0.6571,
+        "mrr": 0.6048,
+        "recall_at_3_by_category": {
+          "adversarial": 1.0,
+          "exact_id": 0.625,
+          "ordinary": 1.0,
+          "paraphrase": 0.1818
+        },
+        "abstention_rate": 0.0769,
+        "latency_ms_p50": 0.57,
+        "latency_ms_p95": 0.62,
+        "cross_tenant_or_group_leaks": 0
+      },
+      "hybrid": {
+        "recall_at_3": 0.7429,
+        "mrr": 0.7238,
+        "recall_at_3_by_category": {
+          "adversarial": 1.0,
+          "exact_id": 0.75,
+          "ordinary": 1.0,
+          "paraphrase": 0.3636
+        },
+        "abstention_rate": 0.0769,
+        "latency_ms_p50": 0.746,
+        "latency_ms_p95": 0.786,
+        "cross_tenant_or_group_leaks": 0
+      }
+    },
+    "sentence-transformers/all-MiniLM-L6-v2": {
+      "bm25": {
+        "recall_at_3": 0.9143,
+        "mrr": 0.8381,
+        "recall_at_3_by_category": {
+          "adversarial": 1.0,
+          "exact_id": 1.0,
+          "ordinary": 1.0,
+          "paraphrase": 0.7273
+        },
+        "abstention_rate": 0.1154,
+        "latency_ms_p50": 0.437,
+        "latency_ms_p95": 0.486,
+        "cross_tenant_or_group_leaks": 0
+      },
+      "dense": {
+        "recall_at_3": 0.8857,
+        "mrr": 0.8429,
+        "recall_at_3_by_category": {
+          "adversarial": 1.0,
+          "exact_id": 0.75,
+          "ordinary": 1.0,
+          "paraphrase": 0.8182
+        },
+        "abstention_rate": 0.5,
+        "latency_ms_p50": 9.119,
+        "latency_ms_p95": 9.926,
+        "cross_tenant_or_group_leaks": 0
+      },
+      "hybrid": {
+        "recall_at_3": 0.9429,
+        "mrr": 0.9286,
+        "recall_at_3_by_category": {
+          "adversarial": 1.0,
+          "exact_id": 1.0,
+          "ordinary": 1.0,
+          "paraphrase": 0.8182
+        },
+        "abstention_rate": 0.5,
+        "latency_ms_p50": 9.604,
+        "latency_ms_p95": 14.056,
+        "cross_tenant_or_group_leaks": 0
+      }
+    }
+  },
+  "note": "Synthetic corpus; latency is in-process retrieval only (no network), single CPU thread pool."
+}

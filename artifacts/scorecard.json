@@ -1,0 +1,105 @@
+{
+  "dataset": "Synthetic classroom test; no real users or model inference",
+  "rag_sources": 1,
+  "cross_tenant_sources": 0,
+  "research_completed": true,
+  "research_review": "approved",
+  "candidate": "candidate-v2",
+  "offline_gate": "eligible",
+  "evidence": {
+    "attester": "demo-ci",
+    "artifact_sha256": "0230e34782fa776ec99b77d7c7dbdafc9f3838bf84a144b2cb25e36e620097c6",
+    "benchmark_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "benchmark": "measured"
+  },
+  "canary_pct": 10,
+  "canary_errors": 12,
+  "canary_requests": 100,
+  "rollout_decision": "rolled_back",
+  "scorecard": {
+    "n": 120,
+    "accuracy": 1.0,
+    "accuracy_ci95": [
+      0.969,
+      1.0
+    ],
+    "precision": 1.0,
+    "precision_ci95": [
+      0.9398,
+      1.0
+    ],
+    "recall": 1.0,
+    "recall_ci95": [
+      0.9398,
+      1.0
+    ],
+    "f1": 1.0,
+    "unsupported_rate": 0.0,
+    "leaks": 0,
+    "selection_rate_gap": 0.0,
+    "recall_gap": 0.0,
+    "groups": {
+      "A": {
+        "n": 60,
+        "positives": 30,
+        "tp": 30,
+        "fp": 0,
+        "tn": 30,
+        "fn": 0,
+        "accuracy": 1.0,
+        "accuracy_ci95": [
+          0.9398,
+          1.0
+        ],
+        "precision": 1.0,
+        "precision_ci95": [
+          0.8865,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.8865,
+          1.0
+        ],
+        "f1": 1.0,
+        "positive_rate": 0.5
+      },
+      "B": {
+        "n": 60,
+        "positives": 30,
+        "tp": 30,
+        "fp": 0,
+        "tn": 30,
+        "fn": 0,
+        "accuracy": 1.0,
+        "accuracy_ci95": [
+          0.9398,
+          1.0
+        ],
+        "precision": 1.0,
+        "precision_ci95": [
+          0.8865,
+          1.0
+        ],
+        "recall": 1.0,
+        "recall_ci95": [
+          0.8865,
+          1.0
+        ],
+        "f1": 1.0,
+        "positive_rate": 0.5
+      }
+    },
+    "gates": {
+      "accuracy": 0.8,
+      "precision": 0.8,
+      "recall": 0.8,
+      "group_recall": 0.7,
+      "selection_gap": 0.2,
+      "recall_gap": 0.2,
+      "unsupported_rate": 0.05
+    },
+    "decision": "READY_FOR_HUMAN_REVIEW",
+    "failed_gates": []
+  }
+}

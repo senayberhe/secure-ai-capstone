@@ -1,0 +1,17 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Secure AI Platform — Synthetic Demonstration</title>
+<style>body{font-family:system-ui,-apple-system,sans-serif;line-height:1.55;background:#f8fafc;color:#0f172a;max-width:1040px;padding:44px 25px;margin:auto}h1{font-size:2.3rem;letter-spacing:-.04em}.tag{font-size:.75rem;letter-spacing:.13em;color:#475569;font-weight:700}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:30px 0}article{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:22px;box-shadow:0 1px 4px #00000007}.value{font-size:1.8rem;font-weight:750}.name{color:#64748b;font-size:.88rem}.alert{padding:16px;border-left:4px solid #b45309;background:#fff7ed}.footer{color:#64748b;font-size:.85rem;margin-top:36px}pre{background:#e2e8f0;padding:18px;overflow:auto;border-radius:8px}</style></head><body>
+<div class="tag">AI ENGINEERING · SECURITY AND RELIABILITY</div><h1>Secure AI Platform</h1>
+<p>Research, evidence access, independent approval, and model release controls — one integrated service.</p>
+<div class="alert"><strong>Synthetic demonstration.</strong> These counts come from a deterministic offline test. They do not establish live-model quality or production security.</div>
+<div class="grid"><article><div class="value">1</div><div class="name">Authorized RAG sources</div></article>
+<article><div class="value">0</div><div class="name">Cross-tenant sources</div></article>
+<article><div class="value">approved</div><div class="name">Research review</div></article>
+<article><div class="value">10%</div><div class="name">Canary share</div></article>
+<article><div class="value">12 / 100</div><div class="name">Observed canary errors</div></article>
+<article><div class="value">ROLLED_BACK</div><div class="name">Rollback decision</div></article></div>
+<h2>What the example demonstrates</h2>
+<p>Tenant-scoped retrieval excludes unauthorized evidence before ranking; a durable research job requires another actor to approve it; a candidate passes offline review but rolls back when 12% of its 100 canary requests fail.</p>
+<h2>Release sequence</h2>
+<pre>Register digest → CI-signed evidence → Independent review + artifact re-hash → 10% Canary → Monitor → Rollback</pre>
+<p class="footer">Open the included scorecard.json for machine-readable details. See README.md and docs/DEPLOYMENT.md before connecting private data.</p></body></html>
